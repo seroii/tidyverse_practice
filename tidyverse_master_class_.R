@@ -679,6 +679,8 @@ library(magrittr)
 library(gganimate)
 library(readxl)
 
+# install.packages("ggthemes")
+
 # check out sheets
 excel_sheets("./GDPcurrent-USD-countries.xlsx")
 
@@ -729,6 +731,8 @@ plot_data %<>%
   slice_max(order_by = gdp, n = 15) %>% 
   ungroup()
 
+# 2022.07.26
+
 # hjust
 # https://stackoverflow.com/questions/7263849/what-do-hjust-and-vjust-do-when-making-a-plot-using-ggplot
 p <- ggplot(plot_data, aes(fill = as.factor(country))) +
@@ -742,7 +746,7 @@ p <- ggplot(plot_data, aes(fill = as.factor(country))) +
        y = "") +
   coord_flip(clip = "off", expand = FALSE) +
   ggthemes::theme_fivethirtyeight() +
-  geom_text(aes(x = ranking, y = -0.01,
+  geom_text(aes(x = ranking, y = -0.01, 
                 label = country),
             hjust = 1) + # hjust: 0 - left, 1 - right 
   geom_text(aes(x = ranking,
@@ -776,4 +780,223 @@ animate(anim, fps = 23, duration = 60,
 #     scale_y_continuous(expand=c(0,0)) +
 #     coord_cartesian(clip = 'on') +
 #     labs(title = "coord_cartesian(clip = 'off')")
+
+
+# -------------------------------------------------------------------------
+
+
+# 2022.07.31 9-1. tidyr
+
+# who 데이터
+
+library(tidyr)
+library(tidyverse) # install.packages ("tidyverse")
+
+who %>% dim()
+glimpse(who)
+?who
+
+# 5번째 열부터 잡아와서 진단이라는 컬럼으로 만들기!
+
+who %>% 
+  pivot_longer (
+    cols = 5:ncol(.),
+    names_to = "diagnosis",
+    values_to = "value",
+    names_prefix = "new"
+  )
+
+# names_pattern 옵션
+
+who %>% pivot_longer(
+  col = 5:ncol(.),
+  names_to = c("diagnosis", "gender", "age"),
+  names_pattern = "new_?(.*)_(.)(.*)", # 대박 ㅋㅋㅋ 어떤 드러운 정보가 와도 잡아올 수 있음. 저 괄호 안에 있는 것이 하나의 names 에 해당하는 정규표현식이다. 
+  values_to = "count"
+) %>% select(
+  diagnosis, gender, age, everything()
+)
+
+# 문제: 잡아온 정보 알맞게 타입 변경하기
+# names_transform 옵션 추가 =
+who %>% pivot_longer(
+  col = 5:ncol(.),
+  names_to = c("diagnosis", "gender", "age"),
+  names_pattern = "new_?(.*)_(.)(.*)", 
+  values_to = "count",
+  names_transform = list(gender = as.factor, age = as.factor)
+) %>% select(
+  diagnosis, gender, age, everything()
+)
+
+
+
+# 한 줄에 여러 subject 의 value 가 들어있는 경우 (key 도 여러 개, 관측치도 여러 개일 경우)
+
+school_db <- tibble::tribble(
+  ~class, ~score_std1, ~score_std2, ~gender_std1, ~gender_std2,
+  1L, 87L, 25L, "M", "F",   # 1L : long 의 줄임말. 정수표현 방법. Interger 로 나타낼 때 쓰인다. 숫자 뒤에 L 붙이면 자동으로 integer 로 들어감. 
+  2L, 45L, 36L, "F", "M",
+  3L, 76L, 43L, "F", "F"
+)
+
+
+school_db %>%
+  pivot_longer(
+    !class,  # class 를 제외한 열을 잡아서 long 으로 끌고 올건데
+    names_to = c(".value", "student"), #  score_(학생), gender_(학생) 에서 sep 인 "_" 를 기준으로 앞의 것 (.value) 과 뒤의 것 ("student") 을 나눈다. .value 가 속한 열이 기존의 값을 끌고 간다.
+    # 점을 찍어 주는 이유 : 걸리는 정보가 gender 와 score 의 2개이므로. 2개라는 걸 알려주는 것. 
+    # .value 는 정해진 명령어이다. .info 이렇게 하면 에러 남. 저 value 라는 글자는 names 에 들어가지 않음. 
+    # .value 가 있어서 values_to = 가 없어도 된다. 
+    names_sep = "_"
+  )
+
+
+# 만약 score 정보만 있는 상태라면 기존 names_to 쓰던 방식대로 써도 된다. 
+school_db %>% 
+  select (class, score_std1, score_std2) %>%
+  pivot_longer(
+    !class,  
+    names_to = "student",
+    names_prefix = "score_",
+    values_to = "score"
+  )
+
+school_db %>%  # 이렇게 해도 된다. score 열 정보를 살리고 싶다면
+  select (class, score_std1, score_std2) %>%
+  pivot_longer(
+    !class,  
+    names_to = c("score", "student"),
+    names_sep = "_"
+  )
+
+school_db %>%  # 이렇게 할 수도 있다. names 의 앞 부분이 names 로 들어갈 게 아니라 value 라는걸 알려주는것이다. 
+  select (class, score_std1, score_std2) %>%
+  pivot_longer(
+    !class,  
+    names_to = c(".value", "student"),
+    names_sep = "_"
+  )
+
+# pivot_wider 접혀 있는 데이터를 펼쳐 줌
+# 접미사가 다르다. _to 가 아니라 _from
+
+library(palmerpenguins) # install.packages("palmerpenguins")
+
+sample_data <- penguins %>%
+  group_by(species, island) %>%
+  summarise(body_kg = mean(body_mass_g, na.rm = T),
+            bill_mm = mean(bill_length_mm, na.rm = T))
+sample_data
+
+
+sample_data %>%
+  pivot_wider(
+    id_cols = species,  # 남겨놓고 싶은 key column (한 개씩만 남음)
+    names_from = island,
+    values_from = body_kg  # body_mm 은 알아서 드롭하는건가? 
+  )
+
+# values_fill
+sample_data %>%
+  pivot_wider(
+    id_cols = species,  
+    names_from = island,
+    values_from = body_kg,  
+    values_fill = 0  # Chinstrap 과 Gentoo 는 서식하지 않는 섬도 있는데 그걸 NA 가 아닌 0 으로 표시하는 옵션
+  )
+
+# values_from 을 두 개 잡을 수 있다 
+tmp <- sample_data %>%
+  pivot_wider(
+    id_cols = species,  
+    names_from = island,
+    values_from = c(body_kg,  bill_mm), # 이렇게 두 개로 하면 알아서 해당 속성의 prefix 를 붙여 준다. 
+  )
+
+
+# 그럼 bill_mm 속성과 body_kg 속성을 다시 key 로 잡고싶으면 다시 pivot_longer 쓰면 되나?  (MK 임의 실습)
+
+tmp %>% pivot_longer(  
+  cols = !species,
+  names_to = c(".value", "island"), # 아까 배운대로, 한 행에 관측치 여러개에 key 여러개일 경우. 앞의 names 는 value 열로 넣고 뒤의 names 는 key 로 넣어라
+  names_pattern = "(.{4}_.{2})_(.*)"  # 우와 이렇게 하니까 됐다
+)   # 원래 데이터랑 달라진 점: 값이 없는 관측치는 NA 로 채워졌다. 모든 케이스에 대해서 행이 생김 
+
+
+# 컬럼 이름 조정 (names_sep)
+sample_data %>%
+  pivot_wider(
+    id_cols = species,  
+    names_from = island,
+    values_from = c(body_kg,  bill_mm), 
+    values_fill = 0,
+    names_sep = "*"
+  )
+
+# 컬럼 이름 조정 (names_glue)
+sample_data %>%
+  pivot_wider(
+    id_cols = species,  
+    names_from = island,
+    values_from = c(body_kg,  bill_mm), 
+    values_fill = 0,
+    names_glue = "{island} 섬의 {.value}" #  "{.value}_{island}" 이런식으로 할 수도 있다 
+  ) %>% glimpse()
+
+
+# values_fn (summarise 단계를 생략할 수 있다)
+penguins %>%
+  drop_na() %>%
+  select(species, island, body_mass_g) %>%
+  pivot_wider(
+    id_cols = species,
+    names_from = island,
+    values_from = body_mass_g,
+    values_fn = mean, # id_cols 로 지정한 species 에 해당하는 같은 island 가 여러개이므로 values_fn 을 안 넣으면 오류가 난다. 
+    # 근데 summarize 쓰는 게 더 읽기 쉬울 것 같다
+    values_fill = 0
+  )
+
+## (번외) glue 패키지 (파이썬의 포맷팅과 비슷한 기능 제공)
+## 왜 names_glue 이름이 glue 일까를 이야기하다가 나온 패키지 
+
+library(glue) # install.packages("glue")
+name <- "명지"
+glue("안녕하세요, 슬기로운 통계생활의 {name}입니다.")
+
+a <- 1:9
+x = 9
+glue("{x} x {a} = {x * a}")
+
+a <- rep(1:9, 9)  # 1부터 9까지를 9번 반복
+x <- rep(1:9, each = 9)  # 각각 9번씩 반복
+glue("{x} x {a} = {x * a}")  # 구구단
+
+
+# 2022.08.01
+
+# separate
+gugudan <- tibble (
+    multiple = glue("{x} x {a}"),
+    result = glue("{x * a}")
+)
+
+gugudan %>%
+    separate(multiple,
+             into = c("level", "multiplier"),
+             sep = " x "
+    )
+
+gugudan %>%
+    separate_rows(multiple,
+                  sep = " x ",
+                  convert = T)  # 잘 이해못함 (separate + pivot_longer 같은 개념이라고 하는데.)
+
+
+gugudan %>%
+    unite("gugudan",    
+          multiple:result,  # multiple 부터 result 까지 합치는데
+          sep = " = ",    # 이 seperator 를 통해 합침
+          remove = T)   # 기존 열은 지움 
 

@@ -6,3 +6,4 @@
 *.db
 *.csv
 *.xlsx
+./map_visualize/data/
